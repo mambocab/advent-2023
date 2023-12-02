@@ -6,7 +6,7 @@
 -}
 
 import Control.Monad (void)
-import Data.Map (Map, findWithDefault, fromList)
+import Data.Map (Map, findWithDefault, fromList, insert, empty, elems)
 import Text.Parsec (ParseError, anyChar, char, digit, endBy, endBy1, endOfLine, eof, letter, many, many1, noneOf, parse, sepBy, sepBy1, spaces, string)
 import Text.Parsec.String (Parser)
 
@@ -101,6 +101,30 @@ part1 path = do
             print $ sum possibleGames
     putStr "\n"
 
+getColor bag color = findWithDefault 0 color bag
+
+accMinBag :: Bag -> Pull -> Bag
+accMinBag bag pull =
+    let old = getColor bag $ color pull
+        new = max old $ count pull
+    in insert (color pull) new bag
+
+makeMinBag :: Game -> Bag
+makeMinBag game = foldl accMinBag empty $ concat $ rounds game
+
+part2 path = do
+    print path
+    result <- readFile path
+    case parseInput result of
+        Left e -> error $ show e
+        Right parsed -> do
+            let serd = toGames parsed
+            print $ map (product . elems . makeMinBag) serd
+            print $ sum $ map (product . elems . makeMinBag) serd
+
 main = do
     part1 "./inputs/example.txt"
     part1 "./inputs/input.txt"
+
+    part2 "./inputs/example.txt"
+    part2 "./inputs/input.txt"
