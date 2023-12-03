@@ -6,11 +6,12 @@
 -}
 
 import Data.Char (isDigit)
-import Data.List (findIndices, mapAccumL)
+import Data.List (findIndices, mapAccumL, elemIndices)
 import Data.Maybe (catMaybes)
-import Data.Set (Set, disjoint, fromList, unions)
+import Data.Set (Set, disjoint, fromList, unions, member)
 import Text.Read (readMaybe)
 
+-- Part 1.
 -- String to data structure utils.
 data LineWindow = LineWindow {above :: String, line :: String, below :: String}
 instance Show LineWindow where
@@ -79,11 +80,41 @@ part1 s = do
     -- print $ map includedNums ws
     print $ sum $ concatMap includedNums ws
 
+-- Part 2.
+findGears lw = catMaybes $ map extractPairsOnly $ findGroupsAdjacentToAsterisk lw
+  where
+    extractPairsOnly (n0:n1:[]) = Just (n n0, n n1)
+    extractPairsOnly _          = Nothing
+
+findGearParsedPairs lw = filter (\x -> length x == 2) $ findGroupsAdjacentToAsterisk lw
+findGroupsAdjacentToAsterisk lw = map (findAdjacentParsedNums lw) (gearCandidates lw)
+  where
+    gearCandidates = elemIndices '*' . line
+findAdjacentParsedNums lw i = filter (adjacent i) pns
+  where
+    pns = concatMap numsInLine $ sequenceA [above, line, below] lw
+    adjacent i pn = i `member` fromList [start pn - 1..end pn+1]
+
+part2 s = do
+    let ws = windows $ lines s
+    -- print $ map findGearParsedPairs ws
+    -- print $ map findGears ws
+    -- print $ concatMap findGears ws
+    -- print $ map (\(x, y) -> x * y) $ concatMap findGears ws
+    print $ sum $ map (\(x, y) -> x * y) $ concatMap findGears ws
+
 main = do
     example <- readFile "input/example.txt"
     input <- readFile "input/input.txt"
 
+    putStrLn "part1"
     putStr "example: "
     part1 example
     putStr "input  : "
     part1 input
+
+    putStrLn "\npart2"
+    putStr "example: "
+    part2 example
+    putStr "input  : "
+    part2 input
