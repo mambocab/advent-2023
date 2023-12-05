@@ -8,7 +8,7 @@
 import           Data.Char  (isDigit)
 import           Data.List  (stripPrefix)
 import           Data.Maybe (fromMaybe)
-import           Data.Set   (fromList, intersection, size)
+import qualified Data.Set   as Set
 
 parseLine s = Card sepWinners sepHave where
     cardless = fromMaybe s (stripPrefix "Card " s)
@@ -18,7 +18,7 @@ parseLine s = Card sepWinners sepHave where
     [sepWinners, sepHave]= map splitHalf [rawWinners, rawHave]
     cardNo = read cardNoStr :: Int
 
-matchCount card = size $ intersection (fromList $ winners card) (fromList $ numbers card)
+matchCount card = Set.size $ Set.intersection (Set.fromList $ winners card) (Set.fromList $ numbers card)
 score card = case matchCount card of
     0 -> 0
     n -> 2 ^ (n - 1)
