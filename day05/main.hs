@@ -6,9 +6,9 @@
 -}
 
 import           Data.Char     (isDigit)
+import           Data.Either   (rights)
 import           Data.Foldable (asum)
 import qualified Data.Map      as Map
-import qualified Debug.Trace   as Trace
 
 data Almanac = Almanac { seeds :: [Int], maps :: [AlmanacMap] } deriving Show
 type MapEntry = (Int, Int, Int)
@@ -54,4 +54,33 @@ trMapEntry i (dstStart, srcStart, len)
     | otherwise = Nothing
         where offset = i - srcStart
 
-main = (print . minimum . translate . parseFile) =<< readFile "input"
+hasSeedForLocation i almanac = case bizarroSeedForLocation i almanac of
+    Right _ -> True
+    Left _  -> False
+
+bizarroSeedForLocation :: Int -> Almanac -> Either Int Int
+bizarroSeedForLocation i (Almanac seeds maps)
+    | seedVal `inSeedRanges` seeds = Right seedVal
+    | otherwise = Left seedVal
+        where seedVal = i `rLookupAlmanacMaps` maps
+
+inSeedRanges i (x:y:tail) = (i >= x && i < x + y) || i `inSeedRanges` tail
+inSeedRanges _ []         = False
+
+-- Assumes 2nd argument is in Alamanac order.
+rLookupAlmanacMaps :: Int -> [AlmanacMap] -> Int
+rLookupAlmanacMaps = foldr $ flip rLookupAlmanacMap
+
+rLookupAlmanacMap :: Int -> AlmanacMap -> Int
+rLookupAlmanacMap i am = maybe i id $ asum $ map (rLookupMapEntry i) am
+rLookupMapEntry :: Int -> MapEntry -> Maybe Int
+rLookupMapEntry i (dstStart, srcStart, len)
+    | i < dstStart = Nothing
+    | offset < len = Just $ srcStart + offset
+    | otherwise = Nothing
+        where offset = i - dstStart
+
+main = do
+    s <- readFile "input"
+    (print . minimum . translate . parseFile) s
+    print $ head $ filter (flip hasSeedForLocation (parseFile s)) [0..]
