@@ -8,8 +8,8 @@
 -- import           Data.Char (isAlpha)
 -- import           Data.List (uncons, null)
 -- import qualified Data.Map as Map
-import           Debug.Trace (traceShowId)
-import Data.Array (Array, array, bounds, assocs)
+import           Debug.Trace (traceShowId, trace, traceShow)
+import Data.Array.IArray (Array, array, bounds, assocs, (!), (//), indices, amap)
 import Data.Ix (inRange)
 import Data.List (intercalate, sortOn)
 import Data.Either (fromRight)
@@ -17,7 +17,7 @@ import Control.Monad (void)
 import Data.Maybe (listToMaybe, maybeToList)
 import qualified Data.Set as Set
 
-data Cell = NS | EW | NE | NW | SW | SE | G | St
+data Cell = NS | EW | NE | NW | SW | SE | G | St deriving Eq
 -- | is a vertical pipe connecting north and south.
 c2c '|' = Right NS
 -- - is a horizontal pipe connecting east and west.
@@ -36,8 +36,6 @@ c2c '.' = Right G
 c2c 'S' = Right St
 c2c c   = Left (c : " not a valid character")
 
--- type Sewer = Array (Int, Int) [Cell]
-
 instance Show Cell where
   show NS = "|"
   show EW = "-"
@@ -48,7 +46,7 @@ instance Show Cell where
   show G  = " "
   show St = "S"
 
-data Direction = N | S | E | W
+data Direction = N | S | E | W deriving Show
 
 hasConnector St _ = True  -- Start connects with anything adjacent and facing it.
 hasConnector G  _ = False -- Ground connects with nothing.
@@ -81,7 +79,6 @@ instance {-# OVERLAPPING #-} Show Sewer where
 
 indexOf i arr = listToMaybe [j | (j, e) <- assocs arr, e == i]
 
--- Cardinal neighbors
 directionFrom:: (Int, Int) -> (Int, Int) -> Maybe Direction
 directionFrom (x, y) (x', y')
   | (x', y') == (x + 1, y) = Just E
@@ -90,24 +87,42 @@ directionFrom (x, y) (x', y')
   | (x', y') == (x, y - 1) = Just N
   | otherwise = Nothing
 
+cardinalNeighbors (x, y) = Set.fromList [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
+
 connected :: ((Int, Int), Cell) -> ((Int, Int), Cell) -> Bool
 connected (coord, cell) (coord', cell') = case directionFrom coord coord' of
   Nothing  -> False
   Just dir -> hasConnector cell dir && hasConnector cell' (opposite dir)
 
--- findLoop returns the coordinates of cells connected to the sewer starting point.
+connectedInSewer :: Sewer -> (Int, Int) -> (Int, Int) -> Bool
+connectedInSewer sewer left right
+  | left `notElem` indices sewer  = False
+  | right `notElem` indices sewer = False
+  | otherwise = connected (left, leftE) (right, rightE)
+    where
+      leftE = sewer ! left
+      rightE = sewer ! right
+
+connectionsInSewer :: Sewer -> (Int, Int) -> Set.Set (Int, Int)
+connectionsInSewer sewer point = Set.filter (connectedInSewer sewer point) (cardinalNeighbors point)
+
+
 findLoop :: Sewer -> Set.Set (Int, Int)
-findLoop sewer = findLoop' (Set.fromList $ maybeToList [indexOf S s]) Set.empty sewer
-findLoop' frontier results s
-  | Set.null frontier = results
-  | otherwise = findLoop frontier' results' s
-     where
-          
+findLoop sewer = findLoop' (Set.fromList $ maybeToList $ indexOf St sewer) Set.empty sewer
+findLoop' :: Set.Set (Int, Int) -> Set.Set (Int, Int) -> Sewer -> Set.Set (Int, Int)
+findLoop' frontier resultsAcc sewer
+  | Set.null frontier = resultsAcc
+  | otherwise = findLoop' frontier' resultsAcc' sewer
+      where
+        adjs        = Set.unions $ Set.map (connectionsInSewer sewer) frontier
+        frontier'   = Set.difference adjs resultsAcc
+        resultsAcc' = frontier `Set.union` resultsAcc
 
 matrixToArray m = array ((0, 0), (maxWidth, maxHeight)) [((x, y), (m !! y) !! x) | x <- [0..maxWidth], y <- [0..maxHeight]]
   where
     maxWidth = (length $ head m) - 1
     maxHeight = length m - 1
+
 main = do
   s <- readFile "input"
   let parsedStrs = sequenceA $ map (sequenceA . map c2c) (lines s)
@@ -115,4 +130,16 @@ main = do
   case parsedStrs of
         Right _ -> return ()
         Left msg -> print msg
-  print $ fromRight (array ((0, 0), (0, 0)) []) (fmap matrixToArray parsedStrs)
+  let sewer :: Sewer = fromRight (array ((0, 0), (0, 0)) []) (fmap matrixToArray parsedStrs)
+  -- print sewer
+  
+  let maybeStartIndex = indexOf St sewer
+  let nextIndices = case maybeStartIndex of
+        Nothing -> []
+        Just startIndex -> Set.toList $ connectionsInSewer sewer startIndex
+
+  let loopIndices = findLoop sewer
+
+  let outsideLoop = [(i, G) | (i, _) <- filter ((`Set.notMember` loopIndices) . fst) $ assocs sewer]
+  let pruned = sewer // outsideLoop
+  print pruned
